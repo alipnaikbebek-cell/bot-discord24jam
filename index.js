@@ -1,39 +1,69 @@
 const { Client, GatewayIntentBits } = require('discord.js');
+const { joinVoiceChannel, getVoiceConnection } = require('@discordjs/voice');
 const http = require('http');
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildVoiceStates // Ditambahkan agar bot bisa mendeteksi voice channel
     ]
 });
 
-// --- TRIK SISTEM 24 JAM ---
-// Membuat web server palsu agar hosting cloud tidak mematikan bot kita
+// Web server palsu untuk Render 24 jam
 http.createServer((req, res) => {
     res.write("Bot aktif 24 jam nonstop!");
     res.end();
 }).listen(process.env.PORT || 3000);
-// --------------------------
 
 client.once('ready', () => {
     console.log(`Sukses! ${client.user.tag} sekarang online.`);
 });
 
-// Fitur Merespons Pesan Teks
-client.on('messageCreate', (message) => {
-    // Abaikan jika yang mengetik adalah bot lain
+client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    // Perintah Teks Biasa
     if (message.content === '!ping') {
-        message.reply('🏓 Pong!');
+        return message.reply('🏓 Pong!');
     }
-    
-    if (message.content === '!halo') {
-        message.reply(`Halo juga @${message.author.username}! Selamat datang di server.`);
+
+    // Perintah JOIN Voice Channel
+    if (message.content === '!join') {
+        const voiceChannel = message.member.voice.channel;
+        
+        // Cek apakah user yang mengetik perintah sudah masuk ke voice channel
+        if (!voiceChannel) {
+            return message.reply('Kamu harus masuk ke voice channel terlebih dahulu!');
+        }
+
+        try {
+            // Proses bot bergabung ke voice channel
+            joinVoiceChannel({
+                channelId: voiceChannel.id,
+                guildId: message.guild.id,
+                adapterCreator: message.guild.voiceAdapterCreator,
+            });
+            
+            message.reply(`🎤 Berhasil masuk ke channel: **${voiceChannel.name}**`);
+        } catch (error) {
+            console.error(error);
+            message.reply('Gagal masuk ke voice channel.');
+        }
+    }
+
+    // Perintah LEAVE/KELUAR Voice Channel
+    if (message.content === '!leave') {
+        const connection = getVoiceConnection(message.guild.id);
+        
+        if (connection) {
+            connection.destroy();
+            message.reply('👋 Keluar dari voice channel.');
+        } else {
+            message.reply('Bot sedang tidak berada di voice channel mana pun.');
+        }
     }
 });
 
-// Mengambil token dari sistem hosting demi keamanan
 client.login(process.env.DISCORD_TOKEN);
