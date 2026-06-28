@@ -6,6 +6,5 @@
     "discord.js": "^14.14.1",
     "@discordjs/voice": "^0.16.0",
     "libsodium-wrappers": "^0.7.13"
-    "discord.js": "^14.14.1"
   }
 }
