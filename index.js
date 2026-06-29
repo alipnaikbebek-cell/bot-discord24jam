@@ -14,18 +14,14 @@ const client = new Client({
     ]
 });
 
-// Inisialisasi DisTube dengan konfigurasi 24 Jam Nonstop & Bebas Blokir IP
+// Inisialisasi DisTube versi terbaru (Opsi lama yang bikin eror sudah dihapus)
 const distube = new DisTube(client, {
     emitNewSongOnly: true,
-    leaveOnEmpty: false,   // JANGAN keluar jika voice channel sepi/kosong
-    leaveOnFinish: false,  // JANGAN keluar jika playlist lagu habis
-    leaveOnStop: false,    // JANGAN keluar jika musik distop
     plugins: [
         new SpotifyPlugin(),
-        new SoundCloudPlugin() // Mengalihkan pencarian audio ke SoundCloud agar lancar di Render
+        new SoundCloudPlugin()
     ]
 });
-
 // Trik Web Server 24 Jam untuk Render agar server tidak "tidur"
 http.createServer((req, res) => {
     res.write("Bot Musik 24 Jam Nonstop Aktif!");
