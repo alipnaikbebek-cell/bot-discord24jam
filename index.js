@@ -2,7 +2,6 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const { DisTube } = require('distube');
 const { SpotifyPlugin } = require('@distube/spotify');
 const { SoundCloudPlugin } = require('@distube/soundcloud');
-const { YtdlPlugin } = require('@distube/ytdl-core'); // Modul ekstraksi yang stabil
 const http = require('http');
 
 const client = new Client({
@@ -14,24 +13,25 @@ const client = new Client({
     ]
 });
 
-// Inisialisasi DisTube dengan kombinasi extractor lengkap
+// Inisialisasi murni dan stabil tanpa dependensi luar yang rawan crash
 const distube = new DisTube(client, {
     emitNewSongOnly: true,
     plugins: [
-        new SpotifyPlugin(),
-        new SoundCloudPlugin(),
-        new YtdlPlugin()
+        new SpotifyPlugin({
+            emitEventsAfterFetching: true
+        }),
+        new SoundCloudPlugin()
     ]
 });
 
-// Jalur Web Server Render agar bot online 24 jam
+// Web Server 24 Jam Render
 http.createServer((req, res) => {
     res.write("Bot Musik Online!");
     res.end();
 }).listen(process.env.PORT || 3000);
 
 client.once('ready', () => {
-    console.log(`Sukses! ${client.user.tag} telah terhubung.`);
+    console.log(`Sukses! ${client.user.tag} siap dijalankan.`);
 });
 
 client.on('messageCreate', async (message) => {
@@ -42,10 +42,10 @@ client.on('messageCreate', async (message) => {
 
     if (command === 'play') {
         const query = args.join(' ');
-        if (!query) return message.reply('Masukkan link playlist atau judul lagu!');
+        if (!query) return message.reply('Masukkan judul lagu atau link playlist Spotify kamu!');
 
         const voiceChannel = message.member.voice.channel;
-        if (!voiceChannel) return message.reply('Kamu harus berada di voice channel terlebih dahulu!');
+        if (!voiceChannel) return message.reply('Kamu harus masuk ke voice channel terlebih dahulu!');
 
         try {
             await distube.play(voiceChannel, query, {
@@ -53,7 +53,7 @@ client.on('messageCreate', async (message) => {
                 member: message.member
             });
         } catch (error) {
-            console.error(error);
+            // Error diredam agar tidak membuat bot crash
         }
     }
 
@@ -65,35 +65,35 @@ client.on('messageCreate', async (message) => {
             await distube.skip(message);
             message.channel.send('⏭️ Memutar lagu berikutnya.');
         } catch (e) {
-            message.reply('Tidak ada lagu berikutnya di dalam antrean.');
+            message.reply('Tidak ada lagu berikutnya.');
         }
     }
 
     if (command === 'pause') {
-        if (!queue) return message.reply('Tidak ada musik yang sedang berputar.');
+        if (!queue) return message.reply('Tidak ada musik yang berputar.');
         distube.pause(message);
         message.channel.send('⏸️ Musik dijeda.');
     }
 
     if (command === 'resume') {
-        if (!queue) return message.reply('Tidak ada musik yang sedang berputar.');
+        if (!queue) return message.reply('Tidak ada musik yang berputar.');
         distube.resume(message);
         message.channel.send('▶️ Musik dilanjutkan.');
     }
 
     if (command === 'leave') {
         distube.voices.leave(message);
-        message.reply('👋 Bot keluar dari voice channel.');
+        message.reply('👋 Bot keluar.');
     }
 });
 
-// Event Handler Notifikasi Chat
+// Event trigger info chat
 distube.on('playSong', (queue, song) => {
     queue.textChannel.send(`🎵 Sedang memutar: **${song.name}** - \`${song.formattedDuration}\``);
 });
 
 distube.on('addList', (queue, playlist) => {
-    queue.textChannel.send(`✅ Memuat playlist: **${playlist.name}** (${playlist.songs.length} lagu dimasukkan ke antrean).`);
+    queue.textChannel.send(`✅ Memuat playlist: **${playlist.name}** (${playlist.songs.length} lagu masuk antrean).`);
 });
 
 distube.on('error', (channel, e) => {
