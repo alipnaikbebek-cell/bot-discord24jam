@@ -2,7 +2,7 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const { DisTube } = require('distube');
 const { SpotifyPlugin } = require('@distube/spotify');
 const { SoundCloudPlugin } = require('@distube/soundcloud');
-const { joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus } = require('@discordjs/voice');
+const { ExtractorPlugin } = require('@distube/extractor');
 const http = require('http');
 
 const client = new Client({
@@ -14,17 +14,19 @@ const client = new Client({
     ]
 });
 
-// Inisialisasi DisTube versi terbaru (Opsi lama yang bikin eror sudah dihapus)
+// Inisialisasi DisTube murni tanpa bentrokan library eksternal
 const distube = new DisTube(client, {
     emitNewSongOnly: true,
     plugins: [
         new SpotifyPlugin(),
-        new SoundCloudPlugin()
+        new SoundCloudPlugin(),
+        new ExtractorPlugin()
     ]
 });
-// Trik Web Server 24 Jam untuk Render agar server tidak "tidur"
+
+// Trik Web Server 24 Jam agar Render tidak tidur
 http.createServer((req, res) => {
-    res.write("Bot Musik 24 Jam Nonstop Aktif!");
+    res.write("Bot Musik 24 Jam Aktif!");
     res.end();
 }).listen(process.env.PORT || 3000);
 
@@ -38,58 +40,33 @@ client.on('messageCreate', async (message) => {
     const args = message.content.slice(1).trim().split(/ +/);
     const command = args.shift().toLowerCase();
 
-    // 1. FITUR PLAY (Putar Musik/Playlist Spotify)
+    // 1. FITUR PLAY (Murni menggunakan penanganan koneksi DisTube)
     if (command === 'play') {
         const query = args.join(' ');
-        if (!query) return message.reply('Masukkan link playlist Spotify atau judul lagu! Contoh: `!play <link>`');
+        if (!query) return message.reply('Masukkan link playlist Spotify atau judul lagu!');
 
         const voiceChannel = message.member.voice.channel;
         if (!voiceChannel) return message.reply('Kamu harus masuk ke voice channel terlebih dahulu!');
 
         try {
+            // DisTube akan otomatis join dan mengunci koneksi voice secara aman di sini
             await distube.play(voiceChannel, query, {
                 textChannel: message.channel,
                 member: message.member
             });
-
-            // Sistem Keras Kepala / Anti-Kabur 24 Jam (Auto Reconnect)
-            const connection = getVoiceConnection(message.guild.id);
-            if (connection) {
-                connection.removeAllListeners('stateChange');
-                connection.on('stateChange', (oldState, newState) => {
-                    if (newState.status === VoiceConnectionStatus.Disconnected) {
-                        console.log('Bot musik terputus paksa. Mengunci ulang koneksi...');
-                        setTimeout(() => {
-                            try {
-                                joinVoiceChannel({
-                                    channelId: voiceChannel.id,
-                                    guildId: message.guild.id,
-                                    adapterCreator: message.guild.voiceAdapterCreator,
-                                });
-                            } catch (e) {
-                                console.error('Gagal reconnect otomatis:', e);
-                            }
-                        }, 3000); // Coba masuk balik dalam 3 detik
-                    }
-                });
-            }
         } catch (error) {
             console.error(error);
             message.reply('Terjadi kesalahan saat memproses lagu/playlist Spotify.');
         }
     }
 
-    // 2. FITUR JOIN (Masuk Manual Tanpa Musik)
+    // 2. FITUR JOIN MANUAL
     if (command === 'join') {
         const voiceChannel = message.member.voice.channel;
         if (!voiceChannel) return message.reply('Kamu harus masuk ke voice channel terlebih dahulu!');
 
         try {
-            joinVoiceChannel({
-                channelId: voiceChannel.id,
-                guildId: message.guild.id,
-                adapterCreator: message.guild.voiceAdapterCreator,
-            });
+            await distube.voices.join(voiceChannel);
             message.reply(`🎤 Berhasil masuk ke channel: **${voiceChannel.name}**`);
         } catch (error) {
             console.error(error);
@@ -97,90 +74,88 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // Ambil data antrean musik saat ini untuk fitur kontrol di bawah
     const queue = distube.getQueue(message);
 
-    // 3. FITUR PAUSE (Jeda Musik)
+    // 3. FITUR PAUSE
     if (command === 'pause') {
         if (!queue) return message.reply('Tidak ada lagu yang sedang diputar.');
-        if (queue.paused) return message.reply('Musik sudah dalam kondisi dijeda (paused).');
-        
+        if (queue.paused) return message.reply('Musik sudah dijeda.');
         distube.pause(message);
         message.channel.send('⏸️ Musik berhasil dijeda.');
     }
 
-    // 4. FITUR RESUME (Lanjutkan Musik)
+    // 4. FITUR RESUME
     if (command === 'resume') {
         if (!queue) return message.reply('Tidak ada lagu yang sedang diputar.');
-        if (!queue.paused) return message.reply('Musik sedang berjalan, tidak sedang dijeda.');
-        
+        if (!queue.paused) return message.reply('Musik sedang berjalan.');
         distube.resume(message);
         message.channel.send('▶️ Musik dilanjutkan kembali.');
     }
 
-    // 5. FITUR NEXT / SKIP (Lewati ke Lagu Berikutnya)
+    // 5. FITUR NEXT / SKIP
     if (command === 'next' || command === 'skip') {
         if (!queue) return message.reply('Tidak ada lagu di dalam antrean.');
-        
         try {
             await distube.skip(message);
             message.channel.send('⏭️ Memutar lagu berikutnya.');
         } catch (e) {
-            message.reply('Tidak ada lagu berikutnya di antrean playlist kamu.');
+            message.reply('Tidak ada lagu berikutnya di antrean.');
         }
     }
 
-    // 6. FITUR BEFORE (Kembali ke Lagu Sebelumnya)
+    // 6. FITUR BEFORE
     if (command === 'before') {
         if (!queue) return message.reply('Tidak ada lagu di dalam antrean.');
-        
         try {
             await distube.previous(message);
             message.channel.send('⏮️ Kembali memutar lagu sebelumnya.');
         } catch (e) {
-            message.reply('Tidak ada riwayat lagu sebelumnya yang bisa diputar.');
+            message.reply('Tidak ada riwayat lagu sebelumnya.');
         }
     }
 
-    // 7. FITUR LOOP (Ulang Lagu / Playlist)
+    // 7. FITUR LOOP
     if (command === 'loop') {
         if (!queue) return message.reply('Tidak ada lagu yang sedang diputar.');
-
         const mode = args[0];
         if (mode === 'lagu') {
             distube.setRepeatMode(message, 1);
-            message.channel.send('🔂 Loop Aktif: Mengulang **lagu ini saja** terus-menerus.');
+            message.channel.send('🔂 Loop Aktif: Mengulang lagu ini saja.');
         } else if (mode === 'playlist') {
             distube.setRepeatMode(message, 2);
-            message.channel.send('🔁 Loop Aktif: Mengulang **seluruh playlist** antrean.');
+            message.channel.send('🔁 Loop Aktif: Mengulang seluruh antrean.');
         } else if (mode === 'off') {
             distube.setRepeatMode(message, 0);
             message.channel.send('▶️ Loop Dinonaktifkan.');
         } else {
-            message.reply('Gunakan perintah dengan benar:\n`!loop lagu` (ulang 1 lagu)\n`!loop playlist` (ulang semua lagu)\n`!loop off` (matikan loop)');
+            message.reply('Gunakan: `!loop lagu` | `!loop playlist` | `!loop off`');
         }
     }
 
-    // 8. FITUR LEAVE (Satu-satunya cara mengusir bot secara legal)
+    // 8. FITUR LEAVE
     if (command === 'leave') {
-        const connection = getVoiceConnection(message.guild.id);
-        if (connection) {
-            connection.removeAllListeners(); // Matikan sistem pengunci otomatis terlebih dahulu
-            distube.voices.leave(message); // Keluarkan bot via DisTube
-            message.reply('👋 Musik dihentikan dan bot keluar atas perintah admin.');
+        if (queue) {
+            distube.voices.leave(message);
+            message.reply('👋 Musik dihentikan dan bot keluar.');
         } else {
             message.reply('Bot sedang tidak berada di voice channel.');
         }
     }
 });
 
-// --- EVENT NOTIFIKASI CHAT ---
+// --- EVENT TRIGGER NOTIFIKASI ---
 distube.on('playSong', (queue, song) => {
     queue.textChannel.send(`🎵 Sedang memutar: **${song.name}** - \`${song.formattedDuration}\``);
 });
 
 distube.on('addList', (queue, playlist) => {
     queue.textChannel.send(`✅ Memuat playlist Spotify: **${playlist.name}** (${playlist.songs.length} lagu dimasukkan ke antrean).`);
+});
+
+// Penanganan Error Internal agar bot tidak gampang crash/log error menumpuk
+distube.on('error', (channel, e) => {
+    console.error(e);
+    if (channel) channel.send(`❌ Terjadi kendala pemrosesan audio: ${e.message.slice(0, 100)}`);
 });
 
 client.login(process.env.DISCORD_TOKEN);
