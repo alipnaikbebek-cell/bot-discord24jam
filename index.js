@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 const { DisTube } = require('distube');
 const { SpotifyPlugin } = require('@distube/spotify');
-const { YtDlpPlugin } = require('@distube/yt-dlp');
+const { SoundCloudPlugin } = require('@distube/soundcloud');
 const { joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus } = require('@discordjs/voice');
 const http = require('http');
 
@@ -14,18 +14,21 @@ const client = new Client({
     ]
 });
 
-// Inisialisasi DisTube dengan konfigurasi 24 Jam Nonstop
+// Inisialisasi DisTube dengan konfigurasi 24 Jam Nonstop & Bebas Blokir IP
 const distube = new DisTube(client, {
     emitNewSongOnly: true,
     leaveOnEmpty: false,   // JANGAN keluar jika voice channel sepi/kosong
     leaveOnFinish: false,  // JANGAN keluar jika playlist lagu habis
     leaveOnStop: false,    // JANGAN keluar jika musik distop
-    plugins: [new SpotifyPlugin(), new YtDlpPlugin()]
+    plugins: [
+        new SpotifyPlugin(),
+        new SoundCloudPlugin() // Mengalihkan pencarian audio ke SoundCloud agar lancar di Render
+    ]
 });
 
 // Trik Web Server 24 Jam untuk Render agar server tidak "tidur"
 http.createServer((req, res) => {
-    res.write("Bot Musik 24 Jam dengan Fitur Lengkap Aktif!");
+    res.write("Bot Musik 24 Jam Nonstop Aktif!");
     res.end();
 }).listen(process.env.PORT || 3000);
 
@@ -80,10 +83,28 @@ client.on('messageCreate', async (message) => {
         }
     }
 
+    // 2. FITUR JOIN (Masuk Manual Tanpa Musik)
+    if (command === 'join') {
+        const voiceChannel = message.member.voice.channel;
+        if (!voiceChannel) return message.reply('Kamu harus masuk ke voice channel terlebih dahulu!');
+
+        try {
+            joinVoiceChannel({
+                channelId: voiceChannel.id,
+                guildId: message.guild.id,
+                adapterCreator: message.guild.voiceAdapterCreator,
+            });
+            message.reply(`🎤 Berhasil masuk ke channel: **${voiceChannel.name}**`);
+        } catch (error) {
+            console.error(error);
+            message.reply('Gagal masuk ke voice channel.');
+        }
+    }
+
     // Ambil data antrean musik saat ini untuk fitur kontrol di bawah
     const queue = distube.getQueue(message);
 
-    // 2. FITUR PAUSE (Jeda Musik)
+    // 3. FITUR PAUSE (Jeda Musik)
     if (command === 'pause') {
         if (!queue) return message.reply('Tidak ada lagu yang sedang diputar.');
         if (queue.paused) return message.reply('Musik sudah dalam kondisi dijeda (paused).');
@@ -92,7 +113,7 @@ client.on('messageCreate', async (message) => {
         message.channel.send('⏸️ Musik berhasil dijeda.');
     }
 
-    // 3. FITUR RESUME (Lanjutkan Musik)
+    // 4. FITUR RESUME (Lanjutkan Musik)
     if (command === 'resume') {
         if (!queue) return message.reply('Tidak ada lagu yang sedang diputar.');
         if (!queue.paused) return message.reply('Musik sedang berjalan, tidak sedang dijeda.');
@@ -101,8 +122,8 @@ client.on('messageCreate', async (message) => {
         message.channel.send('▶️ Musik dilanjutkan kembali.');
     }
 
-    // 4. FITUR NEXT (Lewati ke Lagu Berikutnya)
-    if (command === 'next') {
+    // 5. FITUR NEXT / SKIP (Lewati ke Lagu Berikutnya)
+    if (command === 'next' || command === 'skip') {
         if (!queue) return message.reply('Tidak ada lagu di dalam antrean.');
         
         try {
@@ -113,7 +134,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 5. FITUR BEFORE (Kembali ke Lagu Sebelumnya)
+    // 6. FITUR BEFORE (Kembali ke Lagu Sebelumnya)
     if (command === 'before') {
         if (!queue) return message.reply('Tidak ada lagu di dalam antrean.');
         
@@ -125,7 +146,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 6. FITUR LOOP (Ulang Lagu / Playlist)
+    // 7. FITUR LOOP (Ulang Lagu / Playlist)
     if (command === 'loop') {
         if (!queue) return message.reply('Tidak ada lagu yang sedang diputar.');
 
@@ -144,7 +165,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 7. FITUR LEAVE (Satu-satunya cara legal menyuruh bot keluar)
+    // 8. FITUR LEAVE (Satu-satunya cara mengusir bot secara legal)
     if (command === 'leave') {
         const connection = getVoiceConnection(message.guild.id);
         if (connection) {
