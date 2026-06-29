@@ -11,6 +11,7 @@
     "@distube/spotify": "latest",
     "@distube/soundcloud": "latest",
     "@discordjs/voice": "latest",
-    "libsodium-wrappers": "latest"
+    "libsodium-wrappers": "latest",
+    "ffmpeg-static": "latest"
   }
 }
