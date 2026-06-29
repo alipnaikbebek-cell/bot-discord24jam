@@ -10,6 +10,7 @@
     "distube": "latest",
     "@distube/spotify": "latest",
     "@distube/soundcloud": "latest",
+    "@distube/ytdl-core": "latest",
     "@discordjs/voice": "latest",
     "libsodium-wrappers": "latest",
     "ffmpeg-static": "latest"
