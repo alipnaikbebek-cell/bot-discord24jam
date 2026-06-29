@@ -2,6 +2,9 @@
   "name": "bot-24jam-musik",
   "version": "1.0.0",
   "main": "index.js",
+  "scripts": {
+    "prepare": ""
+  },
   "dependencies": {
     "discord.js": "^14.14.1",
     "distube": "^4.1.1",
